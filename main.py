@@ -18,8 +18,8 @@ SNIPPET_KEYWORD_PREFIX = "snippetkeywordprefix"
 SNIPPET_KEYWORD_SUFFIX = "snippetkeywordsuffix"
 
 
-def parse_header_data(header, output_type):
-    """Process header file of all files"""
+def parse_header_data(header: list[str], output_type: OutputType) -> dict[str, int]:
+    """Parse the header row of a CSV file"""
     header_map = {}
     for index, ele in enumerate(header):
         if "folder" == ele:
@@ -32,8 +32,8 @@ def parse_header_data(header, output_type):
     return header_map
 
 
-def snippet_maker(snippet_name, snippet_keyword, snippet, unique_id):
-    """Define row"""
+def snippet_maker(snippet_name: str, snippet_keyword: str, snippet: str, unique_id: str) -> dict:
+    """Create an Alfred snippet from the given parameters"""
     snippet_dict = {"snippet": "" + snippet,
                     "uid": unique_id,
                     "name": snippet_name,
@@ -41,26 +41,29 @@ def snippet_maker(snippet_name, snippet_keyword, snippet, unique_id):
     return {"alfredsnippet": snippet_dict}
 
 
-def plist_maker(snippetkeywordprefix, snippetkeywordsuffix):
+def plist_maker(snippetkeywordprefix: str, snippetkeywordsuffix: str) -> dict:
+    """Create a plist dictionary from the given parameters"""
     plist_dict = {
         "snippetkeywordprefix": snippetkeywordprefix, "snippetkeywordsuffix": snippetkeywordsuffix
     }
     return plist_dict
 
 
-def remove_existing_file(base_file_path, file_sub_string):
+def remove_existing_file(base_file_path: str, file_sub_string: str):
     """Removed existing file with other uniqueID pattern"""
     for filename in os.listdir(base_file_path):
         if file_sub_string + "[" in filename:
             os.remove(base_file_path + "/" + filename)
 
 
-def make_directory_if_not_created(path):
+def make_directory_if_not_created(path: str):
+    """Create directory if yet created"""
     if not os.path.isdir(path):
         os.mkdir(path)
 
 
-def generate_base_path(folder):
+def generate_base_path(folder: str) -> str:
+    """Get base path for folder"""
     root_path = "output"
     make_directory_if_not_created(root_path)
     snippet_path = "output/snippets"
@@ -70,7 +73,7 @@ def generate_base_path(folder):
     return base_path
 
 
-def process_csv_data(line_data, header_map, output_type):
+def process_csv_data(line_data: list[str], header_map: dict[str, int], output_type: OutputType):
     """Process the csv data"""
     folder = line_data[header_map[FOLDER_JSON]].strip() \
         if output_type == OutputType.JSON else line_data[header_map[FOLDER_PLIST]].strip()
@@ -92,7 +95,7 @@ def process_csv_data(line_data, header_map, output_type):
             json.dump(snippet_maker(name, snippet_keyword, snippet, str(unique_id)), outfile)
 
 
-def read_csv_file(root, csv_file_name, output_type):
+def read_csv_file(root: str, csv_file_name: str, output_type: OutputType):
     """Read content of csv file"""
     with open(os.path.join(root, csv_file_name)) as csv_file:
         csvreader = csv.reader(csv_file, delimiter=TAB_DELIMITER)
@@ -101,7 +104,7 @@ def read_csv_file(root, csv_file_name, output_type):
             process_csv_data(line, header_map, output_type)
 
 
-def process_input_dir(input_dir):
+def process_input_dir(input_dir: str):
     """Loop thought input directory"""
     for (root, path, files) in os.walk(input_dir):
         for file in files:
