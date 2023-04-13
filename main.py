@@ -1,3 +1,4 @@
+"""Module to use csv parser."""
 import csv
 import json
 import os.path
@@ -5,41 +6,30 @@ import plistlib
 import sys
 import uuid
 
-name_column = 0
-keyword_column = 0
-snippet_column = 0
-folder_column = 0
-folder_snip_column = 0
-snippet_keyword_prefix_column = 0
-snippet_keyword_suffix_column = 0
+from model.OutputType import OutputType
+
+TAB_DELIMITER = "\t"
+NAME = "name"
+KEYWORD = "keyword"
+SNIPPET = "snippet"
+FOLDER_JSON = "folder_json"
+FOLDER_PLIST = "folder_plist"
+SNIPPET_KEYWORD_PREFIX = "snippetkeywordprefix"
+SNIPPET_KEYWORD_SUFFIX = "snippetkeywordsuffix"
 
 
 def parse_header_data(header, output_type):
     """Process header file of all files"""
-    global name_column
-    global keyword_column
-    global snippet_column
-    global folder_snip_column
-    global folder_column
-    global snippet_keyword_prefix_column
-    global snippet_keyword_suffix_column
-
-    for n in range(len(header)):
-        if "name" == header[n]:
-            name_column = n
-        if "keyword" == header[n]:
-            keyword_column = n
-        if "snippet" == header[n]:
-            snippet_column = n
-        if "folder" == header[n]:
-            if output_type == "json":
-                folder_snip_column = n
+    header_map = {}
+    for index, ele in enumerate(header):
+        if "folder" == ele:
+            if output_type == OutputType.JSON:
+                header_map[FOLDER_JSON] = index
             else:
-                folder_column = n
-        if "snippetkeywordprefix" == header[n]:
-            snippet_keyword_prefix_column = n
-        if "snippetkeywordsuffix" == header[n]:
-            snippet_keyword_suffix_column = n
+                header_map[FOLDER_PLIST] = index
+        else:
+            header_map[ele] = index
+    return header_map
 
 
 def snippet_maker(snippet_name, snippet_keyword, snippet, unique_id):
@@ -48,7 +38,6 @@ def snippet_maker(snippet_name, snippet_keyword, snippet, unique_id):
                     "uid": unique_id,
                     "name": snippet_name,
                     "keyword": snippet_keyword}
-    print(snippet_dict)
     return {"alfredsnippet": snippet_dict}
 
 
@@ -66,52 +55,50 @@ def remove_existing_file(base_file_path, file_sub_string):
             os.remove(base_file_path + "/" + filename)
 
 
-def process_csv_data(line_data, output_type):
+def make_directory_if_not_created(path):
+    if not os.path.isdir(path):
+        os.mkdir(path)
+
+
+def generate_base_path(folder):
+    root_path = "output"
+    make_directory_if_not_created(root_path)
+    snippet_path = "output/snippets"
+    make_directory_if_not_created(snippet_path)
+    base_path = snippet_path + "/" + folder
+    make_directory_if_not_created(base_path)
+    return base_path
+
+
+def process_csv_data(line_data, header_map, output_type):
     """Process the csv data"""
-    name = line_data[name_column].strip()
-    folder = line_data[folder_snip_column].strip() \
-        if output_type == "json" else line_data[folder_column].strip()
-    snippet_keyword = line_data[keyword_column].strip()
-    snippet = line_data[snippet_column].strip()
-    snippet_keyword_prefix = line_data[snippet_keyword_prefix_column].strip()
-    snippet_keyword_suffix = line_data[snippet_keyword_suffix_column].strip()
-    unique_id = uuid.uuid4()
-    root = "output"
-    if not os.path.isdir(root):
-        os.mkdir(root)
-    root = "output/snippets"
-    if not os.path.isdir(root):
-        os.mkdir(root)
-    base_path = root + "/" + folder
-    if not os.path.isdir(base_path):
-        os.mkdir(base_path)
+    folder = line_data[header_map[FOLDER_JSON]].strip() \
+        if output_type == OutputType.JSON else line_data[header_map[FOLDER_PLIST]].strip()
+    base_path = generate_base_path(folder)
 
-    remove_existing_file(base_path, name)
-
-    if output_type == "json":
+    if output_type == OutputType.PLIST:
+        snippet_keyword_prefix = line_data[header_map[SNIPPET_KEYWORD_PREFIX]].strip()
+        snippet_keyword_suffix = line_data[header_map[SNIPPET_KEYWORD_SUFFIX]].strip()
+        with open(base_path + "/info.plist", "wb") as outfile:
+            plistlib.dump(plist_maker(snippet_keyword_prefix, snippet_keyword_suffix), outfile)
+    elif output_type == OutputType.JSON:
+        name = line_data[header_map[NAME]].strip()
+        snippet_keyword = line_data[header_map[KEYWORD]].strip()
+        snippet = line_data[header_map[SNIPPET]].strip()
+        unique_id = uuid.uuid4()
+        remove_existing_file(base_path, name)
         with open(base_path + '/' + name + '[' + str(unique_id) + "].json", "w",
                   encoding="utf8") as outfile:
             json.dump(snippet_maker(name, snippet_keyword, snippet, str(unique_id)), outfile)
-    if output_type == "plist":
-        with open(base_path + "/info.plist", "wb") as outfile:
-            plistlib.dump(plist_maker(snippet_keyword_prefix, snippet_keyword_suffix), outfile)
 
 
-def read_csv_file(root, csv_file_name):
+def read_csv_file(root, csv_file_name, output_type):
     """Read content of csv file"""
     with open(os.path.join(root, csv_file_name)) as csv_file:
-        csvreader = csv.reader(csv_file, delimiter="\t")
-        parse_header_data(next(csvreader), "json")
-        for line in csv.reader(csv_file, delimiter="\t"):
-            process_csv_data(line, "json")
-
-
-def read_plist_file(root, csv_file_name):
-    with open(os.path.join(root, csv_file_name)) as csv_file:
-        csvreader = csv.reader(csv_file, delimiter="\t")
-        parse_header_data(next(csvreader), "plist")
-        for line in csv.reader(csv_file, delimiter="\t"):
-            process_csv_data(line, "plist")
+        csvreader = csv.reader(csv_file, delimiter=TAB_DELIMITER)
+        header_map = parse_header_data(next(csvreader), output_type)
+        for line in csv.reader(csv_file, delimiter=TAB_DELIMITER):
+            process_csv_data(line, header_map, output_type)
 
 
 def process_input_dir(input_dir):
@@ -119,12 +106,11 @@ def process_input_dir(input_dir):
     for (root, path, files) in os.walk(input_dir):
         for file in files:
             if 'snippet.csv' in file:
-                read_csv_file(root, file)
+                read_csv_file(root, file, OutputType.JSON)
             if 'snippet_extra.csv' in file:
-                read_plist_file(root, file)
+                read_csv_file(root, file, OutputType.PLIST)
 
 
-# Work on after SnippetToCSV
 if __name__ == '__main__':
     args = sys.argv
     process_input_dir(args[1])
